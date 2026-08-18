@@ -1,0 +1,917 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Indian Tourist Destinations Dataset",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "accessibility",
+      "accommodation_types",
+      "activities_available",
+      "altitude_m",
+      "atm_availability",
+      "average_temperature",
+      "avoid_seasons",
+      "best_seasons",
+      "budget_category",
+      "coordinates",
+      "data_sources",
+      "destination_name",
+      "district",
+      "festivals_events",
+      "food_scene",
+      "hidden_gems",
+      "id",
+      "ideal_days",
+      "ideal_for",
+      "ideal_for_why",
+      "internet_connectivity",
+      "language_spoken",
+      "last_updated",
+      "local_cuisine_must_try",
+      "local_culture",
+      "local_customs",
+      "luxury_category",
+      "maximum_days",
+      "mid_range_category",
+      "minimum_days",
+      "mobile_network",
+      "nearest_airport",
+      "nearest_major_city",
+      "nearest_railway_station",
+      "off_season",
+      "peak_tourist_season",
+      "permits_details",
+      "permits_required",
+      "popularity_score",
+      "primary_attractions",
+      "rainfall_pattern",
+      "recent_developments",
+      "region",
+      "road_connectivity",
+      "safety_notes",
+      "safety_rating",
+      "shopping_highlights",
+      "special_considerations",
+      "state",
+      "suggested_itinerary",
+      "sustainability_notes",
+      "trip_types",
+      "unique_experiences",
+      "user_reviews_summary"
+    ],
+    "properties": {
+      "accessibility": {
+        "type": "string"
+      },
+      "accommodation_types": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "activities_available": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "altitude_m": {
+        "type": "integer"
+      },
+      "atm_availability": {
+        "type": "string"
+      },
+      "average_temperature": {
+        "type": "object",
+        "properties": {
+          "winter": {
+            "type": "string"
+          },
+          "summer": {
+            "type": "string"
+          },
+          "monsoon": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "monsoon",
+          "summer",
+          "winter"
+        ]
+      },
+      "avoid_seasons": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "best_seasons": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "budget_category": {
+        "type": "object",
+        "properties": {
+          "accommodation_range": {
+            "type": "array"
+          },
+          "food_range": {
+            "type": "array"
+          },
+          "activities_range": {
+            "type": "array"
+          },
+          "local_transport_range": {
+            "type": "array"
+          },
+          "total_daily_range": {
+            "type": "array"
+          }
+        },
+        "required": [
+          "accommodation_range",
+          "activities_range",
+          "food_range",
+          "local_transport_range",
+          "total_daily_range"
+        ]
+      },
+      "coordinates": {
+        "type": "object",
+        "properties": {
+          "latitude": {
+            "type": "number"
+          },
+          "longitude": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude"
+        ]
+      },
+      "data_sources": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "destination_name": {
+        "type": "string"
+      },
+      "district": {
+        "type": "string"
+      },
+      "festivals_events": {
+        "type": "string"
+      },
+      "food_scene": {
+        "type": "string"
+      },
+      "hidden_gems": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "id": {
+        "type": "integer"
+      },
+      "ideal_days": {
+        "type": [
+          "integer",
+          "number"
+        ]
+      },
+      "ideal_for": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "ideal_for_why": {
+        "type": "object",
+        "properties": {
+          "Couple": {
+            "type": "string"
+          },
+          "Friends": {
+            "type": "string"
+          },
+          "Solo": {
+            "type": "string"
+          },
+          "Family_with_kids": {
+            "type": "string"
+          },
+          "Family_with_elderly": {
+            "type": "string"
+          },
+          "Adventure_seekers": {
+            "type": "string"
+          },
+          "Photographers": {
+            "type": "string"
+          },
+          "Trekking_enthusiasts": {
+            "type": "string"
+          },
+          "History_buff": {
+            "type": "string"
+          },
+          "Families": {
+            "type": "string"
+          },
+          "Pilgrims": {
+            "type": "string"
+          },
+          "First_time_visitors": {
+            "type": "string"
+          },
+          "Day_trip_from_Delhi": {
+            "type": "string"
+          },
+          "Couples": {
+            "type": "string"
+          },
+          "Heritage_lovers": {
+            "type": "string"
+          },
+          "Nature_lovers": {
+            "type": "string"
+          },
+          "Offbeat_travellers": {
+            "type": "string"
+          },
+          "Culture_seekers": {
+            "type": "string"
+          },
+          "Eco_travellers": {
+            "type": "string"
+          },
+          "First_time_hill_station_visitors": {
+            "type": "string"
+          },
+          "Spiritual_seekers": {
+            "type": "string"
+          },
+          "Honeymooners": {
+            "type": "string"
+          },
+          "Offbeat_mountain_lovers": {
+            "type": "string"
+          },
+          "Spiritual_travellers": {
+            "type": "string"
+          },
+          "Road_trippers_from_Dalhousie": {
+            "type": "string"
+          },
+          "Adventure_travellers": {
+            "type": "string"
+          },
+          "Landscape_photographers": {
+            "type": "string"
+          },
+          "Tea_enthusiasts": {
+            "type": "string"
+          },
+          "Photography_enthusiasts": {
+            "type": "string"
+          },
+          "Festival_goers": {
+            "type": "string"
+          },
+          "History_buffs": {
+            "type": "string"
+          },
+          "Waterfall_chasers": {
+            "type": "string"
+          },
+          "Backpackers": {
+            "type": "string"
+          },
+          "Pilgrims_who_enjoy_beaches": {
+            "type": "string"
+          },
+          "Café_and_food_lovers": {
+            "type": "string"
+          },
+          "History_lovers": {
+            "type": "string"
+          },
+          "Slow_travelers": {
+            "type": "string"
+          },
+          "Train_journey_fans": {
+            "type": "string"
+          },
+          "Wellness_travellers": {
+            "type": "string"
+          },
+          "Water_sports_lovers": {
+            "type": "string"
+          },
+          "Slow_travellers": {
+            "type": "string"
+          },
+          "Travellers_heading_to_Cherrapunji/Dawki": {
+            "type": "string"
+          },
+          "Music_and_cafe_lovers": {
+            "type": "string"
+          },
+          "Monsoon_experience_seekers": {
+            "type": "string"
+          },
+          "First_time_Ganga_visitors": {
+            "type": "string"
+          },
+          "Food_lovers": {
+            "type": "string"
+          },
+          "Remote_workers": {
+            "type": "string"
+          },
+          "Birders": {
+            "type": "string"
+          },
+          "Writers_and_remote_workers": {
+            "type": "string"
+          },
+          "Trekkers": {
+            "type": "string"
+          },
+          "Mountain_photographers": {
+            "type": "string"
+          },
+          "Weekend_travellers_from_Delhi": {
+            "type": "string"
+          },
+          "Birders_and_nature_lovers": {
+            "type": "string"
+          },
+          "Wildlife_photographers": {
+            "type": "string"
+          },
+          "First_time_tiger_safari_travellers": {
+            "type": "string"
+          },
+          "First_time_safari_goers": {
+            "type": "string"
+          },
+          "Golden_Triangle_travellers": {
+            "type": "string"
+          },
+          "Serious_wildlife_photographers": {
+            "type": "string"
+          },
+          "Repeat_safari_travellers": {
+            "type": "string"
+          },
+          "Quick_safari_from_Nagpur": {
+            "type": "string"
+          },
+          "Divers_and_snorkellers": {
+            "type": "string"
+          },
+          "Families_with_kids": {
+            "type": "string"
+          },
+          "Offbeat_island_lovers": {
+            "type": "string"
+          },
+          "Culture_lovers": {
+            "type": "string"
+          },
+          "Handicraft_shoppers": {
+            "type": "string"
+          },
+          "Road_trippers": {
+            "type": "string"
+          },
+          "Coffee_lovers": {
+            "type": "string"
+          },
+          "Nature_enthusiasts": {
+            "type": "string"
+          },
+          "Road_trippers_from_Kerala/Karnataka": {
+            "type": "string"
+          },
+          "Road_trip_lovers": {
+            "type": "string"
+          },
+          "Monsoon_photographers": {
+            "type": "string"
+          },
+          "Weekend_getaway_seekers_from_Mumbai/Pune": {
+            "type": "string"
+          },
+          "Coffee_and_nature_lovers": {
+            "type": "string"
+          },
+          "Monsoon_chasers": {
+            "type": "string"
+          },
+          "Macro_and_herp_photographers": {
+            "type": "string"
+          },
+          "Nature_research_and_herp_fans": {
+            "type": "string"
+          },
+          "Serious_monson_chasers": {
+            "type": "string"
+          },
+          "Fit_trekkers": {
+            "type": "string"
+          },
+          "Nature_photographers": {
+            "type": "string"
+          },
+          "Snorkelling_beginners": {
+            "type": "string"
+          },
+          "First_time_Andaman_visitors": {
+            "type": "string"
+          },
+          "Tea_and_heritage_lovers": {
+            "type": "string"
+          },
+          "First_time_Sikkim_travellers": {
+            "type": "string"
+          },
+          "Monastery_and_culture_lovers": {
+            "type": "string"
+          },
+          "Scenery_seekers": {
+            "type": "string"
+          },
+          "Snow_and_high_altitude_lovers": {
+            "type": "string"
+          },
+          "Waterfall_and_nature_lovers": {
+            "type": "string"
+          },
+          "Active_travellers": {
+            "type": "string"
+          },
+          "Wildlife_enthusiasts": {
+            "type": "string"
+          },
+          "Tea_and_nature_lovers": {
+            "type": "string"
+          },
+          "History_and_architecture_lovers": {
+            "type": "string"
+          },
+          "Wildlife_and_birders": {
+            "type": "string"
+          },
+          "Solo_travellers": {
+            "type": "string"
+          },
+          "Quiet_beach_lovers": {
+            "type": "string"
+          },
+          "Adventure_road_trippers": {
+            "type": "string"
+          },
+          "Buddhist_culture_lovers": {
+            "type": "string"
+          },
+          "Experienced_road_travellers": {
+            "type": "string"
+          },
+          "Scenery_lovers": {
+            "type": "string"
+          },
+          "Quiet_seekers": {
+            "type": "string"
+          },
+          "Experienced_trekkers": {
+            "type": "string"
+          },
+          "Offbeat_explorers": {
+            "type": "string"
+          },
+          "Beginner_birders": {
+            "type": "string"
+          },
+          "Birdwatchers": {
+            "type": "string"
+          },
+          "Families_from_Ahmedabad": {
+            "type": "string"
+          },
+          "Culture_and_festival_lovers": {
+            "type": "string"
+          },
+          "First_time_desert_visitors": {
+            "type": "string"
+          },
+          "Sunset_chasers": {
+            "type": "string"
+          },
+          "Culture_plus_sea_travellers": {
+            "type": "string"
+          },
+          "Heritage_enthusiasts": {
+            "type": "string"
+          },
+          "Weekend_getaways_from_Chennai": {
+            "type": "string"
+          },
+          "Quiet_beach_seekers": {
+            "type": "string"
+          },
+          "Snorkellers": {
+            "type": "string"
+          },
+          "Devotees": {
+            "type": "string"
+          },
+          "Yoga_seekers": {
+            "type": "string"
+          },
+          "First_time_spiritual_travellers": {
+            "type": "string"
+          },
+          "Meditation_practitioners": {
+            "type": "string"
+          },
+          "Buddhist_pilgrims": {
+            "type": "string"
+          },
+          "Architecture_lovers": {
+            "type": "string"
+          },
+          "Skiers_and_snowboarders": {
+            "type": "string"
+          },
+          "First_time_skiers": {
+            "type": "string"
+          },
+          "Meditation_seekers": {
+            "type": "string"
+          },
+          "Ashram_visitors": {
+            "type": "string"
+          },
+          "Nature_spiritual_seekers": {
+            "type": "string"
+          },
+          "Pilgrim_families": {
+            "type": "string"
+          },
+          "First_time_Himalayan_pilgrims": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "Active_travellers",
+          "Adventure_road_trippers",
+          "Adventure_seekers",
+          "Adventure_travellers",
+          "Architecture_lovers",
+          "Ashram_visitors",
+          "Backpackers",
+          "Beginner_birders",
+          "Birders",
+          "Birders_and_nature_lovers",
+          "Birdwatchers",
+          "Buddhist_culture_lovers",
+          "Buddhist_pilgrims",
+          "Café_and_food_lovers",
+          "Coffee_and_nature_lovers",
+          "Coffee_lovers",
+          "Couple",
+          "Couples",
+          "Culture_and_festival_lovers",
+          "Culture_lovers",
+          "Culture_plus_sea_travellers",
+          "Culture_seekers",
+          "Day_trip_from_Delhi",
+          "Devotees",
+          "Divers_and_snorkellers",
+          "Eco_travellers",
+          "Experienced_road_travellers",
+          "Experienced_trekkers",
+          "Families",
+          "Families_from_Ahmedabad",
+          "Families_with_kids",
+          "Family_with_elderly",
+          "Family_with_kids",
+          "Festival_goers",
+          "First_time_Andaman_visitors",
+          "First_time_Ganga_visitors",
+          "First_time_Himalayan_pilgrims",
+          "First_time_Sikkim_travellers",
+          "First_time_desert_visitors",
+          "First_time_hill_station_visitors",
+          "First_time_safari_goers",
+          "First_time_skiers",
+          "First_time_spiritual_travellers",
+          "First_time_tiger_safari_travellers",
+          "First_time_visitors",
+          "Fit_trekkers",
+          "Food_lovers",
+          "Friends",
+          "Golden_Triangle_travellers",
+          "Handicraft_shoppers",
+          "Heritage_enthusiasts",
+          "Heritage_lovers",
+          "History_and_architecture_lovers",
+          "History_buff",
+          "History_buffs",
+          "History_lovers",
+          "Honeymooners",
+          "Landscape_photographers",
+          "Macro_and_herp_photographers",
+          "Meditation_practitioners",
+          "Meditation_seekers",
+          "Monastery_and_culture_lovers",
+          "Monsoon_chasers",
+          "Monsoon_experience_seekers",
+          "Monsoon_photographers",
+          "Mountain_photographers",
+          "Music_and_cafe_lovers",
+          "Nature_enthusiasts",
+          "Nature_lovers",
+          "Nature_photographers",
+          "Nature_research_and_herp_fans",
+          "Nature_spiritual_seekers",
+          "Offbeat_explorers",
+          "Offbeat_island_lovers",
+          "Offbeat_mountain_lovers",
+          "Offbeat_travellers",
+          "Photographers",
+          "Photography_enthusiasts",
+          "Pilgrim_families",
+          "Pilgrims",
+          "Pilgrims_who_enjoy_beaches",
+          "Quick_safari_from_Nagpur",
+          "Quiet_beach_lovers",
+          "Quiet_beach_seekers",
+          "Quiet_seekers",
+          "Remote_workers",
+          "Repeat_safari_travellers",
+          "Road_trip_lovers",
+          "Road_trippers",
+          "Road_trippers_from_Dalhousie",
+          "Road_trippers_from_Kerala/Karnataka",
+          "Scenery_lovers",
+          "Scenery_seekers",
+          "Serious_monson_chasers",
+          "Serious_wildlife_photographers",
+          "Skiers_and_snowboarders",
+          "Slow_travelers",
+          "Slow_travellers",
+          "Snorkellers",
+          "Snorkelling_beginners",
+          "Snow_and_high_altitude_lovers",
+          "Solo",
+          "Solo_travellers",
+          "Spiritual_seekers",
+          "Spiritual_travellers",
+          "Sunset_chasers",
+          "Tea_and_heritage_lovers",
+          "Tea_and_nature_lovers",
+          "Tea_enthusiasts",
+          "Train_journey_fans",
+          "Travellers_heading_to_Cherrapunji/Dawki",
+          "Trekkers",
+          "Trekking_enthusiasts",
+          "Water_sports_lovers",
+          "Waterfall_and_nature_lovers",
+          "Waterfall_chasers",
+          "Weekend_getaway_seekers_from_Mumbai/Pune",
+          "Weekend_getaways_from_Chennai",
+          "Weekend_travellers_from_Delhi",
+          "Wellness_travellers",
+          "Wildlife_and_birders",
+          "Wildlife_enthusiasts",
+          "Wildlife_photographers",
+          "Writers_and_remote_workers",
+          "Yoga_seekers"
+        ]
+      },
+      "internet_connectivity": {
+        "type": "string"
+      },
+      "language_spoken": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "last_updated": {
+        "type": "string"
+      },
+      "local_cuisine_must_try": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "local_culture": {
+        "type": "string"
+      },
+      "local_customs": {
+        "type": "string"
+      },
+      "luxury_category": {
+        "type": "object",
+        "properties": {
+          "accommodation_range": {
+            "type": "array"
+          },
+          "food_range": {
+            "type": "array"
+          },
+          "activities_range": {
+            "type": "array"
+          },
+          "local_transport_range": {
+            "type": "array"
+          },
+          "total_daily_range": {
+            "type": "array"
+          }
+        },
+        "required": [
+          "accommodation_range",
+          "activities_range",
+          "food_range",
+          "local_transport_range",
+          "total_daily_range"
+        ]
+      },
+      "maximum_days": {
+        "type": "integer"
+      },
+      "mid_range_category": {
+        "type": "object",
+        "properties": {
+          "accommodation_range": {
+            "type": "array"
+          },
+          "food_range": {
+            "type": "array"
+          },
+          "activities_range": {
+            "type": "array"
+          },
+          "local_transport_range": {
+            "type": "array"
+          },
+          "total_daily_range": {
+            "type": "array"
+          }
+        },
+        "required": [
+          "accommodation_range",
+          "activities_range",
+          "food_range",
+          "local_transport_range",
+          "total_daily_range"
+        ]
+      },
+      "minimum_days": {
+        "type": [
+          "integer",
+          "number"
+        ]
+      },
+      "mobile_network": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "nearest_airport": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "distance_km": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "distance_km",
+          "name"
+        ]
+      },
+      "nearest_major_city": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "distance_km": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "distance_km",
+          "name"
+        ]
+      },
+      "nearest_railway_station": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "distance_km": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "distance_km",
+          "name"
+        ]
+      },
+      "off_season": {
+        "type": "string"
+      },
+      "peak_tourist_season": {
+        "type": "string"
+      },
+      "permits_details": {
+        "type": "string"
+      },
+      "permits_required": {
+        "type": "boolean"
+      },
+      "popularity_score": {
+        "type": "integer"
+      },
+      "primary_attractions": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "rainfall_pattern": {
+        "type": "string"
+      },
+      "recent_developments": {
+        "type": "string"
+      },
+      "region": {
+        "type": "string"
+      },
+      "road_connectivity": {
+        "type": "string"
+      },
+      "safety_notes": {
+        "type": "string"
+      },
+      "safety_rating": {
+        "type": "integer"
+      },
+      "shopping_highlights": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "special_considerations": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string"
+      },
+      "suggested_itinerary": {
+        "type": "string"
+      },
+      "sustainability_notes": {
+        "type": "string"
+      },
+      "trip_types": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "unique_experiences": {
+        "type": "string"
+      },
+      "user_reviews_summary": {
+        "type": "string"
+      }
+    }
+  }
+}

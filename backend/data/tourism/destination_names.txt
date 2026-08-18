@@ -1,0 +1,100 @@
+1. Goa
+2. Ladakh (Leh)
+3. Jaipur
+4. Varanasi (Kashi)
+5. Agra
+6. Udaipur
+7. Kerala Backwaters (Alappuzha & Kumarakom)
+8. Coorg (Kodagu)
+9. Ziro Valley
+10. Mawlynnong & nearby (including Living Root Bridges region)
+11. Shimla
+12. Dharamshala & McLeod Ganj
+13. Manali
+14. Tawang
+15. Khajjiar
+16. Spiti Valley
+17. Nubra Valley
+18. Pangong Lake (Pangong Tso)
+19. Ooty (Udhagamandalam)
+20. Munnar
+21. Kanyakumari
+22. Rann of Kutch (White Desert, Dhordo)
+23. Dhanushkodi (Ghost Town & Beach)
+24. Chitrakote Falls
+25. Gokarna
+26. Pondicherry (Puducherry)
+27. Hampi
+28. Majuli Island
+29. Araku Valley
+30. Varkala
+31. Havelock Island (Swaraj Dweep)
+32. Neil Island (Shaheed Dweep)
+33. Shillong
+34. Cherrapunji & Mawsmai Area (Sohra region)
+35. Dawki & Shnongpdeng
+36. Krang Suri Falls
+37. Rishikesh
+38. Haridwar
+39. Varanasi (Kashi)
+40. Amritsar
+41. Kanatal
+42. Binsar
+43. Munsiyari
+44. Chakrata
+45. Kanha National Park
+46. Ranthambore National Park
+47. Bandhavgarh National Park
+48. Tadoba Andhari Tiger Reserve
+49. Lakshadweep (Agatti–Bangaram–Kadmat circuit)
+50. Kalpeni Island (Lakshadweep)
+51. Jaisalmer (Thar Desert & Fort Town)
+52. Kutch Interior Circuit (Bhuj–Mandvi–Villages)
+53. Coorg (Kodagu)
+54. Wayanad
+55. Tamhini Ghat & Mulshi
+56. Mahabaleshwar & Panchgani
+57. Chikmagalur
+58. Amboli Ghat
+59. Agumbe & Western Ghats Rainforest Belt
+60. Kudremukh & Surrounding Ghats
+61. Havelock Island (Swaraj Dweep)
+62. Neil Island (Shaheed Dweep)
+63. Port Blair & Nearby Islands
+64. Darjeeling
+65. Gangtok & East Sikkim
+66. North Sikkim (Lachung–Lachen Belt)
+67. Meghalaya (Shillong–Cherrapunji–Mawlynnong circuit)
+68. Kaziranga National Park & Assam Tea Belt
+69. Khajuraho & Panna National Park
+70. Orchha & Nearby Betwa Landscapes
+71. Gokarna
+72. Almora & Kasar Devi Belt
+73. Tawang
+74. Spiti Valley
+75. Jibhi & Tirthan Valley
+76. Chitkul & Baspa Valley
+77. Miyar Valley
+78. Keoladeo National Park (Bharatpur Bird Sanctuary)
+79. Ranganathittu Bird Sanctuary
+80. Nal Sarovar Bird Sanctuary
+81. Great Rann of Kutch (White Desert)
+82. Jaisalmer & Thar Desert Dunes
+83. Maravanthe & Karnataka Offbeat Coast
+84. Astaranga & Ramachandi Beaches (Odisha Quiet Coast)
+85. Unakoti & North Tripura Heritage Belt
+86. Mamallapuram (Mahabalipuram) & Coromandel Heritage Coast
+87. Hidden Goa Coves (Butterfly & Nearby Beaches)
+88. Bangaram & Kadmat Islands (Lakshadweep Quiet Beaches)
+89. Malanad–Malabar Backwater & Rural Belt
+90. Krishna Heritage Circuit (Mathura–Vrindavan–Dwarka Focus)
+91. Rishikesh & Haridwar (Himalayan Yoga Route)
+92. Varanasi Ganga Ghats Pilgrimage
+93. Bodh Gaya Buddhist Circuit Hub
+94. Rameswaram & Pamban Coast (Sacred Water Walk)
+95. Hampi & Pattadakal (UNESCO Vijayanagara–Chalukya Circuit)
+96. Gulmarg (Kashmir Ski & Snow Destination)
+97. Auli (Garhwal Ski & Snow Resort)
+98. Tiruvannamalai & Arunachala (Inner Fire Journey)
+99. Amarkantak Nature–Spiritual Loop
+100. Haridwar–Rishikesh–Char Dham Spiritual Trail (Meta‑Circuit Node)

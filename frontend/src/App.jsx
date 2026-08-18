@@ -1,294 +1,619 @@
-import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  Polyline,
+  useMap,
+} from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-
 import L from 'leaflet';
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
-let DefaultIcon = L.icon({
+const API = 'http://127.0.0.1:8000';
+
+const DefaultIcon = L.icon({
   iconUrl: icon,
   shadowUrl: iconShadow,
-  iconAnchor: [12, 41]
+  iconAnchor: [12, 41],
 });
+
 L.Marker.prototype.options.icon = DefaultIcon;
+
+const modeMeta = {
+  cab: { icon: '🚕', label: 'CAB' },
+  train: { icon: '🚆', label: 'TRAIN' },
+  bus: { icon: '🚌', label: 'BUS' },
+  flight: { icon: '✈️', label: 'FLIGHT' },
+};
+
+const modeLineColors = {
+  cab: '#f59e0b',
+  train: '#2563eb',
+  bus: '#16a34a',
+  flight: '#7c3aed',
+};
 
 function MapUpdater({ coordinates }) {
   const map = useMap();
-  React.useEffect(() => {
-    if (coordinates && coordinates.length > 0) {
-      const bounds = L.latLngBounds(coordinates);
-      map.fitBounds(bounds, { padding: [50, 50] });
+
+  useEffect(() => {
+    if (coordinates && coordinates.length > 1) {
+      map.fitBounds(L.latLngBounds(coordinates), {
+        padding: [50, 50],
+      });
     }
   }, [coordinates, map]);
+
   return null;
 }
 
-function App() {
-  const [originInput, setOriginInput] = useState('CHENNAI CENTRAL');
-  const [originCode, setOriginCode] = useState('MAS');
-  const [originSuggestions, setOriginSuggestions] = useState([]);
+function formatRupees(value) {
+  if (!value) return '—';
+  return `₹${Number(value).toLocaleString('en-IN')}`;
+}
 
-  const [destInput, setDestInput] = useState('MADURAI JN');
-  const [destCode, setDestCode] = useState('MDU');
-  const [destSuggestions, setDestSuggestions] = useState([]);
+function getPlaceLabel(place) {
+  if (!place) return '';
+  if (place.type === 'station' && place.code) {
+    return `${place.name} (${place.code})`;
+  }
+  return place.name || '';
+}
 
-  // Date selection (Defaults to today)
-  const [travelDate, setTravelDate] = useState(() => new Date().toISOString().split('T')[0]);
-
-  const [routes, setRoutes] = useState([]);
-  const [selectedRoute, setSelectedRoute] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  // Fetch Autocomplete Suggestions for Origin Station
-  useEffect(() => {
-    if (originInput.trim().length >= 2) {
-      fetch(`http://127.0.0.1:8000/api/stations/search?query=${encodeURIComponent(originInput)}`)
-        .then((res) => res.json())
-        .then((data) => setOriginSuggestions(data.results || []))
-        .catch(() => setOriginSuggestions([]));
-    } else {
-      setOriginSuggestions([]);
-    }
-  }, [originInput]);
-
-  // Fetch Autocomplete Suggestions for Destination Station
-  useEffect(() => {
-    if (destInput.trim().length >= 2) {
-      fetch(`http://127.0.0.1:8000/api/stations/search?query=${encodeURIComponent(destInput)}`)
-        .then((res) => res.json())
-        .then((data) => setDestSuggestions(data.results || []))
-        .catch(() => setDestSuggestions([]));
-    } else {
-      setDestSuggestions([]);
-    }
-  }, [destInput]);
-
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      const res = await fetch(
-        `http://127.0.0.1:8000/api/search?origin_code=${encodeURIComponent(originCode)}&destination_code=${encodeURIComponent(destCode)}&date=${travelDate}`
-      );
-      const data = await res.json();
-
-      const rawOptions = data.options || [];
-
-      // Deduplicate trains by train number to avoid duplicate cards for multi-day schedules
-      const uniqueOptions = rawOptions.filter((route, index, self) => {
-        if (route.mode !== 'train') return true;
-        const trainNo = route.trainNumber || route.train_number || route.id;
-        return index === self.findIndex((r) => (r.trainNumber || r.train_number || r.id) === trainNo);
-      });
-
-      setRoutes(uniqueOptions);
-      if (uniqueOptions.length > 0) {
-        setSelectedRoute(uniqueOptions[0]);
-      } else {
-        setSelectedRoute(null);
-      }
-    } catch (err) {
-      console.error("Failed to fetch routes:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Helper function to resolve train name & number smoothly across schemas
-  const getTrainTitle = (route) => {
-    const name = route.trainName || route.train_name || route.name || route.provider || 'Express Train';
-    const number = route.trainNumber || route.train_number || route.number;
-    return number ? `${name} (${number})` : name;
-  };
+function RouteLeg({ leg }) {
+  const meta = modeMeta[leg.mode] || { icon: '•', label: leg.mode?.toUpperCase() };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', fontFamily: 'sans-serif' }}>
-      {/* Sidebar Controls */}
-      <div style={{ width: '420px', padding: '20px', borderRight: '1px solid #ccc', overflowY: 'auto' }}>
-        <h2>TripForge</h2>
-        
-        <form onSubmit={handleSearch}>
-          {/* Origin Autocomplete */}
-          <div style={{ marginBottom: '15px', position: 'relative' }}>
-            <label style={{ fontWeight: 'bold', fontSize: '14px' }}>Origin Station:</label>
-            <input 
-              type="text" 
-              value={originInput} 
-              onChange={(e) => setOriginInput(e.target.value)} 
-              placeholder="Type city or station name..."
-              style={{ width: '100%', padding: '8px', marginTop: '4px', boxSizing: 'border-box' }}
-            />
-            {originSuggestions.length > 0 && (
-              <div style={{ position: 'absolute', zIndex: 10, width: '100%', backgroundColor: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-                {originSuggestions.map((st) => (
-                  <div 
-                    key={st.code} 
-                    onClick={() => {
-                      setOriginInput(`${st.name} (${st.code})`);
-                      setOriginCode(st.code);
-                      setOriginSuggestions([]);
-                    }}
-                    style={{ padding: '8px', cursor: 'pointer', borderBottom: '1px solid #eee', fontSize: '13px' }}
-                  >
-                    <strong>{st.name}</strong> <span style={{ color: '#007bff' }}>[{st.code}]</span> - {st.state}
-                  </div>
-                ))}
-              </div>
-            )}
+    <div
+      style={{
+        display: 'flex',
+        gap: '10px',
+        padding: '10px 0',
+        borderBottom: '1px solid #eee',
+      }}
+    >
+      <div style={{ fontSize: '24px', width: '32px' }}>{meta.icon}</div>
+
+      <div style={{ flex: 1 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+          <strong>{meta.label}</strong>
+          <span style={{ color: '#555', fontSize: '12px' }}>
+            {leg.duration || ''}
+          </span>
+        </div>
+
+        <div style={{ fontSize: '13px', marginTop: '3px' }}>
+          {leg.from} → {leg.to}
+        </div>
+
+        {leg.mode === 'train' && (
+          <div style={{ fontSize: '12px', color: '#555', marginTop: '4px' }}>
+            #{leg.trainNumber} · {leg.trainName}
+            <br />
+            {leg.departureTime} → {leg.arrivalTime}
+            {leg.intermediateStopsCount !== undefined
+              ? ` · ${leg.intermediateStopsCount} intermediate stops`
+              : ''}
           </div>
+        )}
 
-          {/* Destination Autocomplete */}
-          <div style={{ marginBottom: '15px', position: 'relative' }}>
-            <label style={{ fontWeight: 'bold', fontSize: '14px' }}>Destination Station:</label>
-            <input 
-              type="text" 
-              value={destInput} 
-              onChange={(e) => setDestInput(e.target.value)} 
-              placeholder="Type city or station name..."
-              style={{ width: '100%', padding: '8px', marginTop: '4px', boxSizing: 'border-box' }}
-            />
-            {destSuggestions.length > 0 && (
-              <div style={{ position: 'absolute', zIndex: 10, width: '100%', backgroundColor: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-                {destSuggestions.map((st) => (
-                  <div 
-                    key={st.code} 
-                    onClick={() => {
-                      setDestInput(`${st.name} (${st.code})`);
-                      setDestCode(st.code);
-                      setDestSuggestions([]);
-                    }}
-                    style={{ padding: '8px', cursor: 'pointer', borderBottom: '1px solid #eee', fontSize: '13px' }}
-                  >
-                    <strong>{st.name}</strong> <span style={{ color: '#007bff' }}>[{st.code}]</span> - {st.state}
-                  </div>
-                ))}
-              </div>
-            )}
+        {leg.mode === 'bus' && (
+          <div style={{ fontSize: '12px', color: '#555', marginTop: '4px' }}>
+            {leg.operator} · {leg.busType}
+            <br />
+            {leg.departureTime} → {leg.arrivalTime}
+            {leg.distanceKm ? ` · ${leg.distanceKm} km` : ''}
           </div>
+        )}
 
-          {/* Date Picker Input */}
-          <div style={{ marginBottom: '15px' }}>
-            <label style={{ fontWeight: 'bold', fontSize: '14px' }}>Date of Journey:</label>
-            <input 
-              type="date" 
-              value={travelDate} 
-              min={new Date().toISOString().split('T')[0]}
-              onChange={(e) => setTravelDate(e.target.value)} 
-              style={{ width: '100%', padding: '8px', marginTop: '4px', boxSizing: 'border-box' }}
-            />
+        {leg.mode === 'flight' && (
+          <div style={{ fontSize: '12px', color: '#555', marginTop: '4px' }}>
+            {leg.airline} · {leg.flightNumber} · {leg.class}
+            <br />
+            {leg.departureTime} → {leg.arrivalTime} · {leg.stops}
           </div>
+        )}
 
-          <button 
-            type="submit" 
-            disabled={loading}
-            style={{ width: '100%', padding: '10px', backgroundColor: '#007bff', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-          >
-            {loading ? 'Searching Routes...' : 'Search Routes'}
-          </button>
-        </form>
-
-        <hr style={{ margin: '20px 0' }} />
-
-        <h3>Transport Options ({routes.length})</h3>
-
-        {/* Route Cards */}
-        {routes.map((route, idx) => (
-          <div 
-            key={route.id || idx}
-            onClick={() => setSelectedRoute(route)}
+        {(leg.costINR || leg.priceINR) && (
+          <div
             style={{
-              padding: '12px',
-              margin: '10px 0',
-              border: selectedRoute?.id === route.id ? '2px solid #007bff' : '1px solid #ddd',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              backgroundColor: selectedRoute?.id === route.id ? '#f0f7ff' : '#fff'
+              color: '#15803d',
+              fontWeight: 'bold',
+              fontSize: '12px',
+              marginTop: '4px',
             }}
           >
-            {/* Header: Mode & Provider / Train Title */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <strong style={{ fontSize: '14px' }}>
-                {route.mode === 'train' ? getTrainTitle(route) : (route.provider || 'Cab Option')}
-              </strong>
-              <span style={{ 
-                fontSize: '11px', 
-                padding: '2px 6px', 
-                borderRadius: '4px', 
-                fontWeight: 'bold',
-                backgroundColor: route.mode === 'cab' ? '#fff3cd' : '#d1ecf1',
-                color: route.mode === 'cab' ? '#856404' : '#0c5460'
-              }}>
-                {route.mode.toUpperCase()}
-              </span>
-            </div>
-
-            {/* Cab Option Display */}
-            {route.mode === 'cab' && (
-              <div style={{ marginTop: '8px', fontSize: '13px' }}>
-                <p style={{ margin: '2px 0' }}><strong>Duration:</strong> {route.duration}</p>
-                <p style={{ margin: '2px 0', color: '#28a745', fontWeight: 'bold' }}>Est. Cost: ₹{route.costINR}</p>
-                {route.details?.distance && (
-                  <p style={{ margin: '2px 0', fontSize: '12px', color: '#666' }}>Distance: {route.details.distance}</p>
-                )}
-              </div>
-            )}
-
-            {/* Train Option Display */}
-            {route.mode === 'train' && (
-              <div style={{ marginTop: '8px', fontSize: '13px' }}>
-                <p style={{ margin: '2px 0' }}>
-                  <strong>{route.departureTime || route.departure_time}</strong> → <strong>{route.arrivalTime || route.arrival_time}</strong> ({route.duration})
-                </p>
-                <p style={{ margin: '2px 0', color: '#666', fontSize: '12px' }}>
-                  Route: {route.originStation || originCode} to {route.destinationStation || destCode}
-                </p>
-
-                {/* Collapsible Classes Dropdown */}
-                {route.classes && route.classes.length > 0 && (
-                  <details style={{ marginTop: '8px', borderTop: '1px solid #eee', paddingTop: '6px' }}>
-                    <summary style={{ cursor: 'pointer', color: '#007bff', fontWeight: 'bold', fontSize: '12px' }}>
-                      View Available Classes & Fares ({route.classes.length})
-                    </summary>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '6px' }}>
-                      {route.classes.map((cls) => (
-                        <div key={cls.code} style={{ padding: '6px', backgroundColor: '#f8f9fa', borderRadius: '4px', fontSize: '12px', border: '1px solid #e9ecef' }}>
-                          <div><strong>{cls.code}</strong> - {cls.name}</div>
-                          <div style={{ color: '#28a745', fontWeight: 'bold' }}>₹{cls.price}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                )}
-              </div>
-            )}
+            {formatRupees(leg.costINR || leg.priceINR)}
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RouteCard({ route, selected, onClick }) {
+  const modes = route.legs?.map((x) => modeMeta[x.mode]?.icon || '•').join(' → ');
+
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        border: selected ? '2px solid #2563eb' : '1px solid #ddd',
+        borderRadius: '10px',
+        padding: '14px',
+        marginBottom: '12px',
+        cursor: 'pointer',
+        background: selected ? '#eff6ff' : '#fff',
+        boxShadow: selected ? '0 2px 8px rgba(37,99,235,.12)' : 'none',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: '10px',
+          alignItems: 'flex-start',
+        }}
+      >
+        <div>
+          <strong style={{ fontSize: '15px' }}>{route.title}</strong>
+          <div style={{ fontSize: '16px', marginTop: '5px' }}>{modes}</div>
+        </div>
+
+        <div style={{ textAlign: 'right' }}>
+          <strong>{route.totalDuration}</strong>
+          <div style={{ color: '#15803d', fontWeight: 'bold', fontSize: '13px' }}>
+            {route.totalCostINR ? formatRupees(route.totalCostINR) : 'Cost N/A'}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: '8px' }}>
+        {route.legs?.map((leg, index) => (
+          <RouteLeg key={`${route.id}_${index}`} leg={leg} />
         ))}
       </div>
 
-      {/* Map Container View */}
-      <div style={{ flex: 1 }}>
-        <MapContainer center={[20.5937, 78.9629]} zoom={5} style={{ height: '100%', width: '100%' }}>
+      {route.notes?.length > 0 && (
+        <div
+          style={{
+            marginTop: '8px',
+            padding: '8px',
+            background: '#f8fafc',
+            borderRadius: '6px',
+            fontSize: '11px',
+            color: '#475569',
+          }}
+        >
+          {route.notes.map((note, i) => (
+            <div key={i}>• {note}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function App() {
+  const today = new Date().toISOString().split('T')[0];
+
+  const [originInput, setOriginInput] = useState('Chennai');
+  const [destinationInput, setDestinationInput] = useState('Hampi');
+
+  const [originPlace, setOriginPlace] = useState(null);
+  const [destinationPlace, setDestinationPlace] = useState(null);
+
+  const [originSuggestions, setOriginSuggestions] = useState([]);
+  const [destinationSuggestions, setDestinationSuggestions] = useState([]);
+
+  const [travelDate, setTravelDate] = useState(today);
+  const [routes, setRoutes] = useState([]);
+  const [selectedRoute, setSelectedRoute] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function fetchSuggestions(query, setter) {
+    if (!query || query.trim().length < 2) {
+      setter([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API}/api/places/search?query=${encodeURIComponent(query)}`
+      );
+      const data = await response.json();
+      setter(data.results || []);
+    } catch {
+      setter([]);
+    }
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!originPlace || getPlaceLabel(originPlace) !== originInput) {
+        fetchSuggestions(originInput, setOriginSuggestions);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [originInput, originPlace]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!destinationPlace || getPlaceLabel(destinationPlace) !== destinationInput) {
+        fetchSuggestions(destinationInput, setDestinationSuggestions);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [destinationInput, destinationPlace]);
+
+  async function handleSearch(e) {
+    if (e) e.preventDefault();
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const params = new URLSearchParams({
+        origin: originPlace?.name || originInput,
+        destination: destinationPlace?.name || destinationInput,
+        date: travelDate,
+      });
+
+      if (originPlace?.type === 'station' && originPlace?.code) {
+        params.set('origin_code', originPlace.code);
+      }
+
+      if (destinationPlace?.type === 'station' && destinationPlace?.code) {
+        params.set('destination_code', destinationPlace.code);
+      }
+
+      const response = await fetch(`${API}/api/search?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error('Backend returned an error');
+      }
+
+      const data = await response.json();
+      const options = data.options || [];
+
+      setRoutes(options);
+      setSelectedRoute(options[0] || null);
+
+      if (!options.length) {
+        setError(
+          'No route was found in the current demo datasets. Try a major city or one of the tourism destinations.'
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      setError(
+        'Could not connect to TripForge backend. Make sure FastAPI is running on port 8000.'
+      );
+      setRoutes([]);
+      setSelectedRoute(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    handleSearch();
+    // Initial demo search only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const allMapCoordinates = useMemo(() => {
+    if (!selectedRoute) return [];
+
+    const result = [];
+    for (const leg of selectedRoute.legs || []) {
+      for (const coord of leg.coordinates || []) {
+        if (Array.isArray(coord) && coord.length === 2) {
+          result.push(coord);
+        }
+      }
+    }
+    if (result.length === 0 && Array.isArray(selectedRoute.coordinates)) {
+      return selectedRoute.coordinates.filter((x) => Array.isArray(x) && x.length === 2);
+    }
+    return result;
+  }, [selectedRoute]);
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        height: '100vh',
+        width: '100vw',
+        fontFamily: 'Arial, sans-serif',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Sidebar */}
+      <aside
+        style={{
+          width: '470px',
+          minWidth: '470px',
+          padding: '20px',
+          boxSizing: 'border-box',
+          overflowY: 'auto',
+          borderRight: '1px solid #ddd',
+          background: '#f8fafc',
+        }}
+      >
+        <h1 style={{ color: '#1d4ed8', margin: '0 0 4px' }}>TripForge</h1>
+        <div style={{ color: '#64748b', fontSize: '13px', marginBottom: '18px' }}>
+          Multimodal India travel planner · Demo data
+        </div>
+
+        <form onSubmit={handleSearch}>
+          {/* Origin */}
+          <div style={{ position: 'relative', marginBottom: '15px', zIndex: originSuggestions.length > 0 ? 100 : 1 }}>
+            <label style={{ fontWeight: 'bold', fontSize: '13px' }}>
+              From
+            </label>
+
+            <input
+              value={originInput}
+              onChange={(e) => {
+                setOriginInput(e.target.value);
+                setOriginPlace(null);
+              }}
+              placeholder="City, station or tourist destination"
+              style={{
+                width: '100%',
+                padding: '10px',
+                marginTop: '5px',
+                boxSizing: 'border-box',
+                border: '1px solid #cbd5e1',
+                borderRadius: '6px',
+              }}
+            />
+
+            {originSuggestions.length > 0 && (
+              <SuggestionList
+                items={originSuggestions}
+                onSelect={(place) => {
+                  setOriginPlace(place);
+                  setOriginInput(getPlaceLabel(place));
+                  setOriginSuggestions([]);
+                }}
+              />
+            )}
+          </div>
+
+          {/* Destination */}
+          <div style={{ position: 'relative', marginBottom: '15px', zIndex: destinationSuggestions.length > 0 ? 90 : 1 }}>
+            <label style={{ fontWeight: 'bold', fontSize: '13px' }}>
+              To
+            </label>
+
+            <input
+              value={destinationInput}
+              onChange={(e) => {
+                setDestinationInput(e.target.value);
+                setDestinationPlace(null);
+              }}
+              placeholder="City, station or tourist destination"
+              style={{
+                width: '100%',
+                padding: '10px',
+                marginTop: '5px',
+                boxSizing: 'border-box',
+                border: '1px solid #cbd5e1',
+                borderRadius: '6px',
+              }}
+            />
+
+            {destinationSuggestions.length > 0 && (
+              <SuggestionList
+                items={destinationSuggestions}
+                onSelect={(place) => {
+                  setDestinationPlace(place);
+                  setDestinationInput(getPlaceLabel(place));
+                  setDestinationSuggestions([]);
+                }}
+              />
+            )}
+          </div>
+
+          {/* Date */}
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ fontWeight: 'bold', fontSize: '13px' }}>
+              Journey date
+            </label>
+
+            <input
+              type="date"
+              value={travelDate}
+              min={today}
+              onChange={(e) => setTravelDate(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px',
+                marginTop: '5px',
+                boxSizing: 'border-box',
+                border: '1px solid #cbd5e1',
+                borderRadius: '6px',
+              }}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%',
+              padding: '11px',
+              background: loading ? '#94a3b8' : '#2563eb',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: loading ? 'wait' : 'pointer',
+              fontWeight: 'bold',
+            }}
+          >
+            {loading ? 'Finding transport paths...' : 'Find Transport Paths'}
+          </button>
+        </form>
+
+        <div
+          style={{
+            marginTop: '15px',
+            padding: '10px',
+            background: '#fff7ed',
+            border: '1px solid #fed7aa',
+            borderRadius: '7px',
+            fontSize: '11px',
+            color: '#9a3412',
+          }}
+        >
+          Demo mode: flight dates and bus dates are not treated as real calendar
+          inventory. They are recurring sample schedules for route-planning
+          demonstration.
+        </div>
+
+        {error && (
+          <div
+            style={{
+              marginTop: '12px',
+              padding: '10px',
+              background: '#fee2e2',
+              color: '#991b1b',
+              borderRadius: '7px',
+              fontSize: '12px',
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        <hr style={{ margin: '20px 0' }} />
+
+        <h2 style={{ fontSize: '17px', margin: '0 0 12px' }}>
+          Transport paths ({routes.length})
+        </h2>
+
+        {routes.map((route) => (
+          <RouteCard
+            key={route.id}
+            route={route}
+            selected={selectedRoute?.id === route.id}
+            onClick={() => setSelectedRoute(route)}
+          />
+        ))}
+      </aside>
+
+      {/* Map */}
+      <main style={{ flex: 1, minWidth: 0 }}>
+        <MapContainer
+          center={[20.5937, 78.9629]}
+          zoom={5}
+          style={{ height: '100%', width: '100%' }}
+        >
           <TileLayer
-            attribution='&copy; OpenStreetMap contributors'
+            attribution="&copy; OpenStreetMap contributors"
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          
-          {selectedRoute && selectedRoute.coordinates && selectedRoute.coordinates.length > 0 && (
+
+          {selectedRoute && (
             <>
-              <MapUpdater coordinates={selectedRoute.coordinates} />
-              <Polyline positions={selectedRoute.coordinates} color={selectedRoute.mode === 'cab' ? '#ff8c00' : '#0056b3'} weight={5} />
-              <Marker position={selectedRoute.coordinates[0]}>
-                <Popup>Origin: {originCode}</Popup>
-              </Marker>
-              <Marker position={selectedRoute.coordinates[selectedRoute.coordinates.length - 1]}>
-                <Popup>Destination: {destCode}</Popup>
-              </Marker>
+              <MapUpdater coordinates={allMapCoordinates} />
+
+              {(selectedRoute.legs || []).map((leg, index) => {
+                const coordinates = (leg.coordinates || []).filter(
+                  (x) => Array.isArray(x) && x.length === 2
+                );
+
+                if (coordinates.length < 2) return null;
+
+                return (
+                  <Polyline
+                    key={`${selectedRoute.id}_leg_${index}`}
+                    positions={coordinates}
+                    pathOptions={{
+                      color: modeLineColors[leg.mode] || '#334155',
+                      weight: 5,
+                      opacity: 0.85,
+                      dashArray: leg.mode === 'flight' ? '10 8' : undefined,
+                    }}
+                  />
+                );
+              })}
+
+              {allMapCoordinates.length > 0 && (
+                <>
+                  <Marker position={allMapCoordinates[0]}>
+                    <Popup>
+                      <strong>Journey starts here</strong>
+                      <br />
+                      {selectedRoute.legs?.[0]?.from}
+                    </Popup>
+                  </Marker>
+
+                  <Marker position={allMapCoordinates[allMapCoordinates.length - 1]}>
+                    <Popup>
+                      <strong>Journey ends here</strong>
+                      <br />
+                      {selectedRoute.legs?.[selectedRoute.legs.length - 1]?.to}
+                    </Popup>
+                  </Marker>
+                </>
+              )}
             </>
           )}
         </MapContainer>
-      </div>
+      </main>
+    </div>
+  );
+}
+
+function SuggestionList({ items, onSelect }) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        zIndex: 1000,
+        width: '100%',
+        background: '#fff',
+        border: '1px solid #cbd5e1',
+        borderRadius: '0 0 6px 6px',
+        maxHeight: '240px',
+        overflowY: 'auto',
+        boxShadow: '0 8px 18px rgba(0,0,0,.12)',
+      }}
+    >
+      {items.map((item) => (
+        <div
+          key={item.id}
+          onClick={() => onSelect(item)}
+          style={{
+            padding: '9px 10px',
+            cursor: 'pointer',
+            borderBottom: '1px solid #f1f5f9',
+            fontSize: '12px',
+          }}
+        >
+          <strong>
+            {item.type === 'tourism' ? '📍 ' : item.type === 'station' ? '🚆 ' : '🏙️ '}
+            {item.name}
+          </strong>
+
+          <div style={{ color: '#64748b', marginTop: '2px' }}>
+            {item.type === 'station'
+              ? `Railway station · ${item.code || ''}`
+              : item.type === 'tourism'
+              ? `Tourist destination${item.state ? ` · ${item.state}` : ''}`
+              : 'City / transport location'}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

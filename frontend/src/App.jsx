@@ -201,7 +201,7 @@ function App() {
   const today = new Date().toISOString().split('T')[0];
 
   const [originInput, setOriginInput] = useState('Chennai');
-  const [destinationInput, setDestinationInput] = useState('Hampi');
+  const [destinationInput, setDestinationInput] = useState('Delhi');
 
   const [originPlace, setOriginPlace] = useState(null);
   const [destinationPlace, setDestinationPlace] = useState(null);
@@ -538,11 +538,12 @@ function App() {
                     key={`${selectedRoute.id}_leg_${index}`}
                     positions={coordinates}
                     pathOptions={{
-                      color: modeLineColors[leg.mode] || '#334155',
-                      weight: 5,
-                      opacity: 0.85,
-                      dashArray: leg.mode === 'flight' ? '10 8' : undefined,
-                    }}
+                    color: modeLineColors[leg.mode] || '#334155',
+                    weight: leg.mode === 'flight' ? 4 : 5,
+                    opacity: 0.85,
+                    dashArray: leg.mode === 'flight' ? '2 10' : undefined,
+                    lineCap: leg.mode === 'flight' ? 'round' : 'butt',
+                  }}
                   />
                 );
               })}

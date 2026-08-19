@@ -5,13 +5,16 @@ SQLite-backed multimodal travel planner API.
 
 Features:
 - Fast SQLite querying from tripforge.db (9.8k stations, 1.1k cities, 8.4k trains, 10.3k bus routes, 4.9k flights, 93 tourist spots).
-- Accepts Station Codes, City Names, or Tourism Spot Names for both Origin and Destination.
+- Universal Location Resolver: Accepts City Names, Tourism Destination Spots, or Station Codes for Origin and Destination.
+- Automatic City & Station Hub Resolution:
+    - Resolves parent City name for Flights & Buses.
+    - Resolves all major Railway Stations in the city hub for Trains.
+- Prioritized Dropdown Search (Cities -> Tourist Spots -> Major Stations).
 - Multimodal routing engine:
     1. Direct Cab
-    2. Cab + Train + Cab
-    3. Cab + Bus + Cab
-    4. Cab + Flight + Cab
-- Standardized response payload for all options (legs, totalDuration, totalCostINR, coordinates).
+    2. Direct Flight / Cab + Flight + Cab
+    3. Direct Bus / Cab + Bus + Cab
+    4. Direct Train / Cab + Train + Cab
 """
 
 from __future__ import annotations
@@ -179,7 +182,7 @@ def parse_weekday(date_string: Optional[str]) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
-# Location Resolution
+# Location Resolution & Prioritized Dropdown Search
 # ---------------------------------------------------------------------------
 
 def station_by_code(conn: sqlite3.Connection, value: str):
@@ -202,62 +205,74 @@ def search_locations(conn: sqlite3.Connection, query: str, limit: int = 10):
         return []
 
     like = f"%{q}%"
+    exact_like = f"{q}%"
+    results = []
+    seen_ids = set()
 
-    stations = conn.execute(
-        """SELECT station_id AS id, station_code AS code, station_name AS name,
-                  state, latitude AS lat, longitude AS lng, 'station' AS type
-           FROM stations
-           WHERE station_code LIKE ? OR station_name LIKE ?
-           ORDER BY
-             CASE
-               WHEN station_code=? THEN 0
-               WHEN station_name=? THEN 1
-               WHEN station_code LIKE ? THEN 2
-               ELSE 3
-             END,
-             station_name
-           LIMIT ?""",
-        (f"{q}%", like, q, q, f"{q}%", limit),
+    # 1. Search Cities first (e.g. DELHI, CHENNAI, MUMBAI, BANGALORE, GOA)
+    cities = conn.execute(
+        """SELECT city_id AS id, city_name AS name,
+                  latitude AS lat, longitude AS lng, 'city' AS type
+           FROM cities
+           WHERE city_name LIKE ?
+           ORDER BY CASE WHEN city_name=? THEN 0 WHEN city_name LIKE ? THEN 1 ELSE 2 END, city_name
+           LIMIT 4""",
+        (like, q, exact_like),
     ).fetchall()
 
-    remaining = max(0, limit - len(stations))
+    for r in cities:
+        d = dict(r)
+        key = f"city_{d['id']}"
+        if key not in seen_ids:
+            results.append(d)
+            seen_ids.add(key)
 
-    cities = []
+    # 2. Search Tourism Destinations (e.g. Hampi, Baga Beach, Ooty)
+    destinations = conn.execute(
+        """SELECT destination_id AS id, destination_name AS name,
+                  state, latitude AS lat, longitude AS lng, 'tourism' AS type
+           FROM destinations
+           WHERE destination_name LIKE ?
+           ORDER BY CASE WHEN destination_name=? THEN 0 WHEN destination_name LIKE ? THEN 1 ELSE 2 END, destination_name
+           LIMIT 4""",
+        (like, q, exact_like),
+    ).fetchall()
+
+    for r in destinations:
+        d = dict(r)
+        key = f"tourism_{d['id']}"
+        if key not in seen_ids:
+            results.append(d)
+            seen_ids.add(key)
+
+    # 3. Search Major Railway Stations
+    remaining = max(0, limit - len(results))
     if remaining > 0:
-        cities = conn.execute(
-            """SELECT city_id AS id, city_name AS name,
-                      latitude AS lat, longitude AS lng, 'city' AS type
-               FROM cities
-               WHERE city_name LIKE ?
-               ORDER BY CASE WHEN city_name=? THEN 0 ELSE 1 END, city_name
+        stations = conn.execute(
+            """SELECT station_id AS id, station_code AS code, station_name AS name,
+                      state, latitude AS lat, longitude AS lng, 'station' AS type
+               FROM stations
+               WHERE station_code LIKE ? OR station_name LIKE ?
+               ORDER BY
+                 CASE
+                   WHEN station_code=? THEN 0
+                   WHEN station_name=? THEN 1
+                   WHEN station_code LIKE ? THEN 2
+                   ELSE 3
+                 END,
+                 station_name
                LIMIT ?""",
-            (like, q, remaining),
+            (exact_like, like, q, q, exact_like, remaining + 4),
         ).fetchall()
 
-    remaining = max(0, limit - len(stations) - len(cities))
+        for r in stations:
+            d = dict(r)
+            key = f"station_{d['id']}"
+            if key not in seen_ids and len(results) < limit:
+                results.append(d)
+                seen_ids.add(key)
 
-    destinations = []
-    if remaining > 0:
-        destinations = conn.execute(
-            """SELECT destination_id AS id, destination_name AS name,
-                      state, latitude AS lat, longitude AS lng, 'tourism' AS type
-               FROM destinations
-               WHERE destination_name LIKE ?
-               ORDER BY CASE WHEN destination_name=? THEN 0 ELSE 1 END,
-                        destination_name
-               LIMIT ?""",
-            (like, q, remaining),
-        ).fetchall()
-
-    result = []
-    for row in stations:
-        result.append(dict(row))
-    for row in cities:
-        result.append(dict(row))
-    for row in destinations:
-        result.append(dict(row))
-
-    return result[:limit]
+    return results[:limit]
 
 
 def resolve_location(conn: sqlite3.Connection, value: str):
@@ -285,7 +300,7 @@ def resolve_location(conn: sqlite3.Connection, value: str):
     if not loc:
         row = conn.execute(
             """SELECT destination_id, destination_name, latitude, longitude,
-                      state, nearest_railway_station, nearest_railway_distance_km, nearest_airport
+                      state, nearest_railway_station, nearest_railway_distance_km, nearest_airport, nearest_major_city
                FROM destinations
                WHERE UPPER(destination_name)=?
                LIMIT 1""",
@@ -303,6 +318,7 @@ def resolve_location(conn: sqlite3.Connection, value: str):
                 "nearest_railway_station": row["nearest_railway_station"],
                 "nearest_railway_distance_km": row["nearest_railway_distance_km"],
                 "nearest_airport_name": row["nearest_airport"],
+                "nearest_major_city": row["nearest_major_city"],
             }
 
     # 3. Check exact city
@@ -340,7 +356,7 @@ def resolve_location(conn: sqlite3.Connection, value: str):
                 "lng": m.get("lng"),
             }
 
-    # If coordinates are missing, attempt fallback to nearest station matching location name
+    # Fallback to station coordinates if lat/lng missing
     if loc and (loc.get("lat") is None or loc.get("lng") is None):
         name_clean = norm(loc["name"])
         st_row = conn.execute(
@@ -355,6 +371,69 @@ def resolve_location(conn: sqlite3.Connection, value: str):
             loc["lng"] = st_row["longitude"]
 
     return loc
+
+
+def extract_city_name(conn: sqlite3.Connection, location: dict) -> str:
+    if not location:
+        return ""
+
+    if location["type"] == "city":
+        return norm(location["name"])
+
+    if location["type"] == "tourism":
+        if location.get("nearest_major_city"):
+            return norm(location["nearest_major_city"])
+        # Find nearest city in database
+        if location.get("lat") and location.get("lng"):
+            c = nearest_cities(conn, location["lat"], location["lng"], limit=1)
+            if c:
+                return norm(c[0][1]["city_name"])
+        return norm(location["name"])
+
+    if location["type"] == "station":
+        st_name = norm(location.get("station_name") or location["name"])
+        for suffix in [
+            " CENTRAL", " JN", " JUNCTION", " CANTT", " CANTONMENT",
+            " EGMORE", " PARK", " TOWN", " BEACH", " TERMINUS", " S ROHILLA", " CITY"
+        ]:
+            if st_name.endswith(suffix):
+                return st_name[:-len(suffix)].strip()
+        # Look up nearest city in cities table
+        if location.get("lat") and location.get("lng"):
+            c = nearest_cities(conn, location["lat"], location["lng"], limit=1)
+            if c:
+                return norm(c[0][1]["city_name"])
+        return st_name
+
+    return norm(location.get("name", ""))
+
+
+def get_location_stations(conn: sqlite3.Connection, location: dict):
+    stations = []
+    seen_codes = set()
+
+    # If location itself is a station
+    if location.get("station_code") or location.get("code"):
+        code = norm(location.get("station_code") or location.get("code"))
+        row = conn.execute(
+            "SELECT station_id, station_code, station_name, state, latitude, longitude FROM stations WHERE station_code=? LIMIT 1",
+            (code,)
+        ).fetchone()
+        if row:
+            stations.append(dict(row))
+            seen_codes.add(code)
+
+    # Nearby stations within 40 km
+    lat, lng = location.get("lat"), location.get("lng")
+    if lat is not None and lng is not None:
+        near = nearest_stations(conn, lat, lng, limit=8, max_km=100.0)
+        for d, r in near:
+            c = r["station_code"]
+            if c not in seen_codes:
+                stations.append(dict(r))
+                seen_codes.add(c)
+
+    return stations
 
 
 def nearest_stations(conn: sqlite3.Connection, lat: float, lng: float, limit: int = 4, max_km: float = 150.0):
@@ -398,7 +477,7 @@ def nearest_cities(conn: sqlite3.Connection, lat: float, lng: float, limit: int 
 
 
 # ---------------------------------------------------------------------------
-# Leg Builders & Route Builders
+# Leg & Option Builders
 # ---------------------------------------------------------------------------
 
 def make_cab_leg(from_name: str, from_lat: float, from_lng: float, to_name: str, to_lat: float, to_lng: float):
@@ -447,7 +526,7 @@ def make_direct_cab_option(origin_loc: dict, dest_loc: dict):
     }
 
 
-def get_train_legs_between(conn: sqlite3.Connection, station_a_code: str, station_b_code: str, weekday: Optional[str] = None, limit: int = 5):
+def get_train_legs_between(conn: sqlite3.Connection, station_a_code: str, station_b_code: str, weekday: Optional[str] = None, limit: int = 4):
     a_code = norm(station_a_code)
     b_code = norm(station_b_code)
 
@@ -698,20 +777,74 @@ def build_multimodal_options(conn: sqlite3.Connection, origin_loc: dict, dest_lo
     orig_lat, orig_lng = origin_loc["lat"], origin_loc["lng"]
     dest_lat, dest_lng = dest_loc["lat"], dest_loc["lng"]
 
-    if orig_lat is None or orig_lng is None or dest_lat is None or dest_lng is None:
-        return []
+    city_O = extract_city_name(conn, origin_loc)
+    city_D = extract_city_name(conn, dest_loc)
 
-    # --- 1. Multimodal Railway Routes (Cab + Train + Cab) ---
-    orig_stations = nearest_stations(conn, orig_lat, orig_lng, limit=3, max_km=150.0)
-    dest_stations = nearest_stations(conn, dest_lat, dest_lng, limit=3, max_km=150.0)
+    # --- 1. Direct Flights / Multimodal Flight Routes ---
+    f_legs = get_flight_legs_between(conn, city_O, city_D, limit=4)
+    for f_leg in f_legs:
+        combo_key = f"flight_{f_leg['airline']}_{f_leg['flightNumber']}"
+        if combo_key in seen_combos:
+            continue
+        seen_combos.add(combo_key)
 
-    for o_dist, o_st in orig_stations:
-        for d_dist, d_st in dest_stations:
+        legs = []
+        notes = []
+
+        # If origin location is not at city center/airport, add first-mile cab
+        if orig_lat and orig_lng:
+            c1 = make_cab_leg(
+                origin_loc["name"], orig_lat, orig_lng,
+                f"{city_O} Airport", orig_lat, orig_lng
+            )
+            # Add cab leg only if travel is meaningful (>3km)
+            if c1 and c1["distanceKm"] > 3.0:
+                legs.append(c1)
+                notes.append(f"First-mile airport cab ({c1['distanceKm']} km)")
+
+        legs.append(f_leg)
+
+        if dest_lat and dest_lng:
+            c2 = make_cab_leg(
+                f"{city_D} Airport", dest_lat, dest_lng,
+                dest_loc["name"], dest_lat, dest_lng
+            )
+            if c2 and c2["distanceKm"] > 3.0:
+                legs.append(c2)
+                notes.append(f"Last-mile airport cab ({c2['distanceKm']} km)")
+
+        tot_mins = sum(leg.get("durationMinutes", 0) or 0 for leg in legs)
+        tot_cost = sum(leg.get("costINR", 0) or 0 for leg in legs)
+        all_coords = [pt for leg in legs for pt in leg.get("coordinates", [])]
+
+        title = f"Flight {f_leg['flightNumber']} ({f_leg['airline']})"
+        if len(legs) > 1:
+            title = f"Cab + Flight {f_leg['flightNumber']} + Cab"
+
+        options.append({
+            "id": combo_key,
+            "title": title,
+            "mode": "flight" if len(legs) == 1 else "multimodal",
+            "provider": f"{f_leg['airline']} ({f_leg['flightNumber']})",
+            "totalDuration": fmt_minutes(tot_mins),
+            "totalDurationMinutes": tot_mins,
+            "totalCostINR": tot_cost,
+            "legs": legs,
+            "coordinates": all_coords,
+            "notes": notes,
+        })
+
+    # --- 2. Multimodal Railway Routes (City Stations Expansion) ---
+    orig_stations = get_location_stations(conn, origin_loc)
+    dest_stations = get_location_stations(conn, dest_loc)
+
+    for o_st in orig_stations:
+        for d_st in dest_stations:
             if o_st["station_code"] == d_st["station_code"]:
                 continue
 
             t_legs = get_train_legs_between(
-                conn, o_st["station_code"], d_st["station_code"], weekday=weekday, limit=2
+                conn, o_st["station_code"], d_st["station_code"], weekday=weekday, limit=8
             )
 
             for t_leg in t_legs:
@@ -723,38 +856,44 @@ def build_multimodal_options(conn: sqlite3.Connection, origin_loc: dict, dest_lo
                 legs = []
                 notes = []
 
-                # First mile cab if distance > 1.5 km
-                if o_dist > 1.5:
-                    c1 = make_cab_leg(
-                        origin_loc["name"], orig_lat, orig_lng,
-                        f"{o_st['station_name']} ({o_st['station_code']})", o_st["latitude"], o_st["longitude"]
-                    )
-                    if c1:
-                        legs.append(c1)
-                        notes.append(f"First-mile cab: {round(o_dist, 1)} km to {o_st['station_name']}")
+                # First mile cab calculation
+                if orig_lat and orig_lng and o_st.get("latitude") and o_st.get("longitude"):
+                    o_dist = haversine_km(orig_lat, orig_lng, o_st["latitude"], o_st["longitude"])
+                    if o_dist > 1.5:
+                        c1 = make_cab_leg(
+                            origin_loc["name"], orig_lat, orig_lng,
+                            f"{o_st['station_name']} ({o_st['station_code']})", o_st["latitude"], o_st["longitude"]
+                        )
+                        if c1:
+                            legs.append(c1)
+                            notes.append(f"First-mile cab: {round(o_dist, 1)} km to {o_st['station_name']}")
 
                 legs.append(t_leg)
 
-                # Last mile cab if distance > 1.5 km
-                if d_dist > 1.5:
-                    c2 = make_cab_leg(
-                        f"{d_st['station_name']} ({d_st['station_code']})", d_st["latitude"], d_st["longitude"],
-                        dest_loc["name"], dest_lat, dest_lng
-                    )
-                    if c2:
-                        legs.append(c2)
-                        notes.append(f"Last-mile cab: {round(d_dist, 1)} km from {d_st['station_name']}")
+                # Last mile cab calculation
+                if dest_lat and dest_lng and d_st.get("latitude") and d_st.get("longitude"):
+                    d_dist = haversine_km(dest_lat, dest_lng, d_st["latitude"], d_st["longitude"])
+                    if d_dist > 1.5:
+                        c2 = make_cab_leg(
+                            f"{d_st['station_name']} ({d_st['station_code']})", d_st["latitude"], d_st["longitude"],
+                            dest_loc["name"], dest_lat, dest_lng
+                        )
+                        if c2:
+                            legs.append(c2)
+                            notes.append(f"Last-mile cab: {round(d_dist, 1)} km from {d_st['station_name']}")
 
                 tot_mins = sum(leg.get("durationMinutes", 0) or 0 for leg in legs)
                 tot_cost = sum(leg.get("costINR", 0) or 0 for leg in legs)
                 all_coords = [pt for leg in legs for pt in leg.get("coordinates", [])]
 
-                title = f"Cab + Train #{t_leg['trainNumber']} + Cab" if len(legs) == 3 else f"Train #{t_leg['trainNumber']} ({t_leg['trainName']})"
+                title = f"Train #{t_leg['trainNumber']} ({t_leg['trainName']})"
+                if len(legs) > 1:
+                    title = f"Cab + Train #{t_leg['trainNumber']} + Cab"
 
                 options.append({
                     "id": combo_key,
                     "title": title,
-                    "mode": "multimodal" if len(legs) > 1 else "train",
+                    "mode": "train" if len(legs) == 1 else "multimodal",
                     "provider": f"Train #{t_leg['trainNumber']} ({t_leg['trainName']})",
                     "totalDuration": fmt_minutes(tot_mins),
                     "totalDurationMinutes": tot_mins,
@@ -764,120 +903,57 @@ def build_multimodal_options(conn: sqlite3.Connection, origin_loc: dict, dest_lo
                     "notes": notes,
                 })
 
-    # --- 2. Multimodal Bus Routes (Cab + Bus + Cab) ---
-    orig_cities = nearest_cities(conn, orig_lat, orig_lng, limit=3, max_km=150.0)
-    dest_cities = nearest_cities(conn, dest_lat, dest_lng, limit=3, max_km=150.0)
+    # --- 3. Direct Bus / Multimodal Bus Routes ---
+    b_legs = get_bus_legs_between(conn, city_O, city_D, limit=4)
+    for b_leg in b_legs:
+        combo_key = f"bus_{b_leg['operator']}_{b_leg['departureTime']}"
+        if combo_key in seen_combos:
+            continue
+        seen_combos.add(combo_key)
 
-    for o_dist, o_city in orig_cities:
-        for d_dist, d_city in dest_cities:
-            if o_city["city_name"] == d_city["city_name"]:
-                continue
+        legs = []
+        notes = []
 
-            b_legs = get_bus_legs_between(conn, o_city["city_name"], d_city["city_name"], limit=2)
+        if orig_lat and orig_lng:
+            c1 = make_cab_leg(
+                origin_loc["name"], orig_lat, orig_lng,
+                f"{city_O} Bus Stand", orig_lat, orig_lng
+            )
+            if c1 and c1["distanceKm"] > 3.0:
+                legs.append(c1)
+                notes.append(f"First-mile cab ({c1['distanceKm']} km)")
 
-            for b_leg in b_legs:
-                combo_key = f"bus_{b_leg['operator']}_{o_city['city_name']}_{d_city['city_name']}_{b_leg['departureTime']}"
-                if combo_key in seen_combos:
-                    continue
-                seen_combos.add(combo_key)
+        legs.append(b_leg)
 
-                legs = []
-                notes = []
+        if dest_lat and dest_lng:
+            c2 = make_cab_leg(
+                f"{city_D} Bus Stand", dest_lat, dest_lng,
+                dest_loc["name"], dest_lat, dest_lng
+            )
+            if c2 and c2["distanceKm"] > 3.0:
+                legs.append(c2)
+                notes.append(f"Last-mile cab ({c2['distanceKm']} km)")
 
-                if o_dist > 2.0:
-                    c1 = make_cab_leg(
-                        origin_loc["name"], orig_lat, orig_lng,
-                        f"{o_city['city_name']} Bus Stand", o_city["latitude"], o_city["longitude"]
-                    )
-                    if c1:
-                        legs.append(c1)
-                        notes.append(f"First-mile cab: {round(o_dist, 1)} km to {o_city['city_name']}")
+        tot_mins = sum(leg.get("durationMinutes", 0) or 0 for leg in legs)
+        tot_cost = sum(leg.get("costINR", 0) or 0 for leg in legs)
+        all_coords = [pt for leg in legs for pt in leg.get("coordinates", [])]
 
-                legs.append(b_leg)
+        title = f"Intercity Bus ({b_leg['operator']})"
+        if len(legs) > 1:
+            title = f"Cab + Intercity Bus ({b_leg['operator']}) + Cab"
 
-                if d_dist > 2.0:
-                    c2 = make_cab_leg(
-                        f"{d_city['city_name']} Bus Stand", d_city["latitude"], d_city["longitude"],
-                        dest_loc["name"], dest_lat, dest_lng
-                    )
-                    if c2:
-                        legs.append(c2)
-                        notes.append(f"Last-mile cab: {round(d_dist, 1)} km to destination")
-
-                tot_mins = sum(leg.get("durationMinutes", 0) or 0 for leg in legs)
-                tot_cost = sum(leg.get("costINR", 0) or 0 for leg in legs)
-                all_coords = [pt for leg in legs for pt in leg.get("coordinates", [])]
-
-                title = f"Cab + Intercity Bus + Cab ({b_leg['operator']})"
-
-                options.append({
-                    "id": combo_key,
-                    "title": title,
-                    "mode": "multimodal" if len(legs) > 1 else "bus",
-                    "provider": b_leg["operator"],
-                    "totalDuration": fmt_minutes(tot_mins),
-                    "totalDurationMinutes": tot_mins,
-                    "totalCostINR": tot_cost,
-                    "legs": legs,
-                    "coordinates": all_coords,
-                    "notes": notes,
-                })
-
-    # --- 3. Multimodal Flight Routes (Cab + Flight + Cab) ---
-    for o_dist, o_city in orig_cities:
-        for d_dist, d_city in dest_cities:
-            if o_city["city_name"] == d_city["city_name"]:
-                continue
-
-            f_legs = get_flight_legs_between(conn, o_city["city_name"], d_city["city_name"], limit=2)
-
-            for f_leg in f_legs:
-                combo_key = f"flight_{f_leg['airline']}_{f_leg['flightNumber']}_{o_city['city_name']}_{d_city['city_name']}"
-                if combo_key in seen_combos:
-                    continue
-                seen_combos.add(combo_key)
-
-                legs = []
-                notes = []
-
-                if o_dist > 2.0:
-                    c1 = make_cab_leg(
-                        origin_loc["name"], orig_lat, orig_lng,
-                        f"{o_city['city_name']} Airport", o_city["latitude"], o_city["longitude"]
-                    )
-                    if c1:
-                        legs.append(c1)
-                        notes.append(f"First-mile airport cab ({round(o_dist, 1)} km)")
-
-                legs.append(f_leg)
-
-                if d_dist > 2.0:
-                    c2 = make_cab_leg(
-                        f"{d_city['city_name']} Airport", d_city["latitude"], d_city["longitude"],
-                        dest_loc["name"], dest_lat, dest_lng
-                    )
-                    if c2:
-                        legs.append(c2)
-                        notes.append(f"Last-mile airport cab ({round(d_dist, 1)} km)")
-
-                tot_mins = sum(leg.get("durationMinutes", 0) or 0 for leg in legs)
-                tot_cost = sum(leg.get("costINR", 0) or 0 for leg in legs)
-                all_coords = [pt for leg in legs for pt in leg.get("coordinates", [])]
-
-                title = f"Cab + Flight {f_leg['flightNumber']} ({f_leg['airline']}) + Cab"
-
-                options.append({
-                    "id": combo_key,
-                    "title": title,
-                    "mode": "multimodal" if len(legs) > 1 else "flight",
-                    "provider": f"{f_leg['airline']} ({f_leg['flightNumber']})",
-                    "totalDuration": fmt_minutes(tot_mins),
-                    "totalDurationMinutes": tot_mins,
-                    "totalCostINR": tot_cost,
-                    "legs": legs,
-                    "coordinates": all_coords,
-                    "notes": notes,
-                })
+        options.append({
+            "id": combo_key,
+            "title": title,
+            "mode": "bus" if len(legs) == 1 else "multimodal",
+            "provider": b_leg["operator"],
+            "totalDuration": fmt_minutes(tot_mins),
+            "totalDurationMinutes": tot_mins,
+            "totalCostINR": tot_cost,
+            "legs": legs,
+            "coordinates": all_coords,
+            "notes": notes,
+        })
 
     return options
 
@@ -927,7 +1003,7 @@ def search_routes(
 
     try:
         origin_val = safe_str(origin) or safe_str(origin_code) or "Chennai"
-        dest_val = safe_str(destination) or safe_str(destination_code) or "Hampi"
+        dest_val = safe_str(destination) or safe_str(destination_code) or "Delhi"
         date_val = safe_str(travel_date) or safe_str(date)
 
         origin_loc = resolve_location(conn, origin_val)
@@ -950,11 +1026,11 @@ def search_routes(
         if direct_cab:
             options.append(direct_cab)
 
-        # 2. Multimodal Transit Engine (Cab + Train/Bus/Flight + Cab)
+        # 2. Multimodal & Direct Options (Flights, Trains, Buses)
         mm_options = build_multimodal_options(conn, origin_loc, dest_loc, weekday=weekday)
         options.extend(mm_options)
 
-        # Sort options by duration
+        # Sort options by total duration
         options.sort(key=lambda x: x.get("totalDurationMinutes", 999999))
 
         return {
@@ -962,7 +1038,7 @@ def search_routes(
             "destination": dest_loc,
             "travel_date": date_val,
             "demo_mode": True,
-            "options": options[:15],
+            "options": options[:30],
         }
 
     finally:

@@ -12,9 +12,9 @@ Features:
 - Prioritized Dropdown Search (Cities -> Tourist Spots -> Major Stations).
 - Multimodal routing engine:
     1. Direct Cab
-    2. Direct Flight / Cab + Flight + Cab
+    2. Direct Flight / Connecting Flight / Cab + Flight + Cab
     3. Direct Bus / Cab + Bus + Cab
-    4. Direct Train / Cab + Train + Cab
+    4. Direct Train / Connecting Train (A -> C -> B) / Cab + Train + Cab
 """
 
 from __future__ import annotations
@@ -181,6 +181,28 @@ def parse_weekday(date_string: Optional[str]) -> Optional[str]:
         return None
 
 
+def get_city_coords(conn: sqlite3.Connection, city_name: str) -> Optional[list[float]]:
+    if not city_name:
+        return None
+    q = norm(city_name)
+
+    row = conn.execute(
+        "SELECT latitude, longitude FROM cities WHERE UPPER(city_name)=? AND latitude IS NOT NULL AND longitude IS NOT NULL LIMIT 1",
+        (q,)
+    ).fetchone()
+    if row and row["latitude"] is not None and row["longitude"] is not None:
+        return [float(row["latitude"]), float(row["longitude"])]
+
+    row = conn.execute(
+        "SELECT latitude, longitude FROM stations WHERE (UPPER(station_name) LIKE ? OR UPPER(station_code)=?) AND latitude IS NOT NULL AND longitude IS NOT NULL LIMIT 1",
+        (f"%{q}%", q)
+    ).fetchone()
+    if row and row["latitude"] is not None and row["longitude"] is not None:
+        return [float(row["latitude"]), float(row["longitude"])]
+
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Location Resolution & Prioritized Dropdown Search
 # ---------------------------------------------------------------------------
@@ -209,7 +231,7 @@ def search_locations(conn: sqlite3.Connection, query: str, limit: int = 10):
     results = []
     seen_ids = set()
 
-    # 1. Search Cities first (e.g. DELHI, CHENNAI, MUMBAI, BANGALORE, GOA)
+    # 1. Search Cities first
     cities = conn.execute(
         """SELECT city_id AS id, city_name AS name,
                   latitude AS lat, longitude AS lng, 'city' AS type
@@ -227,7 +249,7 @@ def search_locations(conn: sqlite3.Connection, query: str, limit: int = 10):
             results.append(d)
             seen_ids.add(key)
 
-    # 2. Search Tourism Destinations (e.g. Hampi, Baga Beach, Ooty)
+    # 2. Search Tourism Destinations
     destinations = conn.execute(
         """SELECT destination_id AS id, destination_name AS name,
                   state, latitude AS lat, longitude AS lng, 'tourism' AS type
@@ -245,7 +267,7 @@ def search_locations(conn: sqlite3.Connection, query: str, limit: int = 10):
             results.append(d)
             seen_ids.add(key)
 
-    # 3. Search Major Railway Stations
+    # 3. Search Railway Stations
     remaining = max(0, limit - len(results))
     if remaining > 0:
         stations = conn.execute(
@@ -358,17 +380,10 @@ def resolve_location(conn: sqlite3.Connection, value: str):
 
     # Fallback to station coordinates if lat/lng missing
     if loc and (loc.get("lat") is None or loc.get("lng") is None):
-        name_clean = norm(loc["name"])
-        st_row = conn.execute(
-            """SELECT latitude, longitude FROM stations
-               WHERE (station_name LIKE ? OR station_code=?)
-                 AND latitude IS NOT NULL AND longitude IS NOT NULL
-               LIMIT 1""",
-            (f"%{name_clean}%", name_clean),
-        ).fetchone()
-        if st_row:
-            loc["lat"] = st_row["latitude"]
-            loc["lng"] = st_row["longitude"]
+        c = get_city_coords(conn, loc["name"])
+        if c:
+            loc["lat"] = c[0]
+            loc["lng"] = c[1]
 
     return loc
 
@@ -383,7 +398,6 @@ def extract_city_name(conn: sqlite3.Connection, location: dict) -> str:
     if location["type"] == "tourism":
         if location.get("nearest_major_city"):
             return norm(location["nearest_major_city"])
-        # Find nearest city in database
         if location.get("lat") and location.get("lng"):
             c = nearest_cities(conn, location["lat"], location["lng"], limit=1)
             if c:
@@ -398,7 +412,6 @@ def extract_city_name(conn: sqlite3.Connection, location: dict) -> str:
         ]:
             if st_name.endswith(suffix):
                 return st_name[:-len(suffix)].strip()
-        # Look up nearest city in cities table
         if location.get("lat") and location.get("lng"):
             c = nearest_cities(conn, location["lat"], location["lng"], limit=1)
             if c:
@@ -412,7 +425,6 @@ def get_location_stations(conn: sqlite3.Connection, location: dict):
     stations = []
     seen_codes = set()
 
-    # If location itself is a station
     if location.get("station_code") or location.get("code"):
         code = norm(location.get("station_code") or location.get("code"))
         row = conn.execute(
@@ -423,10 +435,9 @@ def get_location_stations(conn: sqlite3.Connection, location: dict):
             stations.append(dict(row))
             seen_codes.add(code)
 
-    # Nearby stations within 40 km
     lat, lng = location.get("lat"), location.get("lng")
     if lat is not None and lng is not None:
-        near = nearest_stations(conn, lat, lng, limit=8, max_km=100.0)
+        near = nearest_stations(conn, lat, lng, limit=5, max_km=45.0)
         for d, r in near:
             c = r["station_code"]
             if c not in seen_codes:
@@ -674,9 +685,9 @@ def get_bus_legs_between(conn: sqlite3.Connection, city_a_name: str, city_b_name
         if duration is None:
             duration = minutes_between(r["departure"], r["arrival"]) or 300
 
-        coords = []
-        if r["from_lat"] and r["from_lng"] and r["to_lat"] and r["to_lng"]:
-            coords = [[r["from_lat"], r["from_lng"]], [r["to_lat"], r["to_lng"]]]
+        from_c = get_city_coords(conn, r["from_city"]) or [13.0827, 80.2707]
+        to_c = get_city_coords(conn, r["to_city"]) or [28.6139, 77.2090]
+        coords = [from_c, to_c]
 
         dist_km = r["distance_km"] or 200
         cost = int(250 + dist_km * 1.6)
@@ -714,11 +725,7 @@ def get_flight_legs_between(conn: sqlite3.Connection, city_a_name: str, city_b_n
                fs.flight_number,
                fs.travel_class,
                c1.city_name AS from_city,
-               c1.latitude AS from_lat,
-               c1.longitude AS from_lng,
                c2.city_name AS to_city,
-               c2.latitude AS to_lat,
-               c2.longitude AS to_lng,
                fs.departure,
                fs.arrival,
                fs.duration_minutes,
@@ -740,10 +747,22 @@ def get_flight_legs_between(conn: sqlite3.Connection, city_a_name: str, city_b_n
         if duration is None:
             duration = minutes_between(r["departure"], r["arrival"]) or 120
 
-        coords = []
-        if r["from_lat"] and r["from_lng"] and r["to_lat"] and r["to_lng"]:
-            coords = [[r["from_lat"], r["from_lng"]], [r["to_lat"], r["to_lng"]]]
+        # Always resolve flight coordinates for from and to cities
+        from_c = get_city_coords(conn, r["from_city"]) or [13.0827, 80.2707]
+        to_c = get_city_coords(conn, r["to_city"]) or [28.6139, 77.2090]
+        coords = [from_c]
 
+        stops_str = str(r["stops"] or "").strip().upper()
+        if stops_str and stops_str != "NON-STOP" and "0" not in stops_str:
+            # Check for connecting stop
+            match = re.search(r"VIA\s+([A-Z\s]+)", stops_str)
+            if match:
+                via_city = match.group(1).strip()
+                via_c = get_city_coords(conn, via_city)
+                if via_c:
+                    coords.append(via_c)
+
+        coords.append(to_c)
         cost = int(r["price_inr"]) if r["price_inr"] is not None else 4500
 
         flight_legs.append({
@@ -759,11 +778,77 @@ def get_flight_legs_between(conn: sqlite3.Connection, city_a_name: str, city_b_n
             "duration": fmt_minutes(duration),
             "durationMinutes": duration,
             "costINR": cost,
-            "stops": r["stops"],
+            "stops": r["stops"] or "non-stop",
             "coordinates": coords,
         })
 
     return flight_legs
+
+
+def get_connecting_train_options(conn: sqlite3.Connection, orig_stations: list[dict], dest_stations: list[dict], weekday: Optional[str] = None, limit: int = 3):
+    HUB_STATIONS = [
+        ("BZA", "Vijayawada Junction"),
+        ("NGP", "Nagpur Junction"),
+        ("BPL", "Bhopal Junction"),
+        ("PUNE", "Pune Junction"),
+        ("SBC", "KSR Bengaluru"),
+        ("CNB", "Kanpur Central"),
+        ("VSKP", "Visakhapatnam"),
+        ("R", "Raipur Junction"),
+        ("BSL", "Bhusaval Junction"),
+        ("ALD", "Prayagraj Junction"),
+    ]
+
+    connecting_options = []
+    seen = set()
+
+    for o_st in orig_stations[:2]:
+        for d_st in dest_stations[:2]:
+            o_code = o_st["station_code"]
+            d_code = d_st["station_code"]
+
+            for hub_code, hub_name in HUB_STATIONS:
+                if hub_code == o_code or hub_code == d_code:
+                    continue
+
+                t1_legs = get_train_legs_between(conn, o_code, hub_code, weekday=weekday, limit=1)
+                if not t1_legs:
+                    continue
+
+                t2_legs = get_train_legs_between(conn, hub_code, d_code, weekday=weekday, limit=1)
+                if not t2_legs:
+                    continue
+
+                t1 = t1_legs[0]
+                t2 = t2_legs[0]
+
+                key = f"conn_train_{t1['trainNumber']}_{t2['trainNumber']}_{hub_code}"
+                if key in seen:
+                    continue
+                seen.add(key)
+
+                legs = [t1, t2]
+                tot_mins = (t1.get("durationMinutes", 300) or 300) + (t2.get("durationMinutes", 300) or 300) + 90
+                tot_cost = (t1.get("costINR", 780) or 780) + (t2.get("costINR", 780) or 780)
+                coords = (t1.get("coordinates") or []) + (t2.get("coordinates") or [])
+
+                connecting_options.append({
+                    "id": key,
+                    "title": f"Connecting Train: #{t1['trainNumber']} + #{t2['trainNumber']} (via {hub_name})",
+                    "mode": "multimodal",
+                    "provider": f"Connecting Trains via {hub_name}",
+                    "totalDuration": fmt_minutes(tot_mins),
+                    "totalDurationMinutes": tot_mins,
+                    "totalCostINR": tot_cost,
+                    "legs": legs,
+                    "coordinates": coords,
+                    "notes": [f"Transfer at {hub_name} ({hub_code})"],
+                })
+
+                if len(connecting_options) >= limit:
+                    return connecting_options
+
+    return connecting_options
 
 
 # ---------------------------------------------------------------------------
@@ -791,13 +876,12 @@ def build_multimodal_options(conn: sqlite3.Connection, origin_loc: dict, dest_lo
         legs = []
         notes = []
 
-        # If origin location is not at city center/airport, add first-mile cab
         if orig_lat and orig_lng:
+            orig_c = f_leg["coordinates"][0] if f_leg["coordinates"] else [orig_lat, orig_lng]
             c1 = make_cab_leg(
                 origin_loc["name"], orig_lat, orig_lng,
-                f"{city_O} Airport", orig_lat, orig_lng
+                f"{city_O} Airport", orig_c[0], orig_c[1]
             )
-            # Add cab leg only if travel is meaningful (>3km)
             if c1 and c1["distanceKm"] > 3.0:
                 legs.append(c1)
                 notes.append(f"First-mile airport cab ({c1['distanceKm']} km)")
@@ -805,8 +889,9 @@ def build_multimodal_options(conn: sqlite3.Connection, origin_loc: dict, dest_lo
         legs.append(f_leg)
 
         if dest_lat and dest_lng:
+            dest_c = f_leg["coordinates"][-1] if f_leg["coordinates"] else [dest_lat, dest_lng]
             c2 = make_cab_leg(
-                f"{city_D} Airport", dest_lat, dest_lng,
+                f"{city_D} Airport", dest_c[0], dest_c[1],
                 dest_loc["name"], dest_lat, dest_lng
             )
             if c2 and c2["distanceKm"] > 3.0:
@@ -834,7 +919,7 @@ def build_multimodal_options(conn: sqlite3.Connection, origin_loc: dict, dest_lo
             "notes": notes,
         })
 
-    # --- 2. Multimodal Railway Routes (City Stations Expansion) ---
+    # --- 2. Multimodal Railway Routes & Connecting Trains ---
     orig_stations = get_location_stations(conn, origin_loc)
     dest_stations = get_location_stations(conn, dest_loc)
 
@@ -844,7 +929,7 @@ def build_multimodal_options(conn: sqlite3.Connection, origin_loc: dict, dest_lo
                 continue
 
             t_legs = get_train_legs_between(
-                conn, o_st["station_code"], d_st["station_code"], weekday=weekday, limit=8
+                conn, o_st["station_code"], d_st["station_code"], weekday=weekday, limit=3
             )
 
             for t_leg in t_legs:
@@ -856,7 +941,6 @@ def build_multimodal_options(conn: sqlite3.Connection, origin_loc: dict, dest_lo
                 legs = []
                 notes = []
 
-                # First mile cab calculation
                 if orig_lat and orig_lng and o_st.get("latitude") and o_st.get("longitude"):
                     o_dist = haversine_km(orig_lat, orig_lng, o_st["latitude"], o_st["longitude"])
                     if o_dist > 1.5:
@@ -870,7 +954,6 @@ def build_multimodal_options(conn: sqlite3.Connection, origin_loc: dict, dest_lo
 
                 legs.append(t_leg)
 
-                # Last mile cab calculation
                 if dest_lat and dest_lng and d_st.get("latitude") and d_st.get("longitude"):
                     d_dist = haversine_km(dest_lat, dest_lng, d_st["latitude"], d_st["longitude"])
                     if d_dist > 1.5:
@@ -902,6 +985,12 @@ def build_multimodal_options(conn: sqlite3.Connection, origin_loc: dict, dest_lo
                     "coordinates": all_coords,
                     "notes": notes,
                 })
+
+    # Add Connecting Train Options if direct train options are few (< 3)
+    train_count = sum(1 for o in options if "train" in o["mode"] or "multimodal" in o["mode"])
+    if train_count < 4:
+        conn_trains = get_connecting_train_options(conn, orig_stations, dest_stations, weekday=weekday, limit=3)
+        options.extend(conn_trains)
 
     # --- 3. Direct Bus / Multimodal Bus Routes ---
     b_legs = get_bus_legs_between(conn, city_O, city_D, limit=4)
@@ -1026,7 +1115,7 @@ def search_routes(
         if direct_cab:
             options.append(direct_cab)
 
-        # 2. Multimodal & Direct Options (Flights, Trains, Buses)
+        # 2. Multimodal & Direct Options (Flights, Trains, Buses, Connecting Trains)
         mm_options = build_multimodal_options(conn, origin_loc, dest_loc, weekday=weekday)
         options.extend(mm_options)
 
@@ -1038,7 +1127,7 @@ def search_routes(
             "destination": dest_loc,
             "travel_date": date_val,
             "demo_mode": True,
-            "options": options[:30],
+            "options": options[:20],
         }
 
     finally:
